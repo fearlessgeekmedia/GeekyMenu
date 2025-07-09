@@ -1,6 +1,6 @@
 # GeekyMenu
 
-A fast, fuzzy-search application launcher for Linux with a terminal-based UI. Quickly find and launch applications from your system's `.desktop` files.
+A fast, fuzzy-search application launcher for Linux with a terminal-based UI. Quickly find and launch applications from your system's `.desktop` files. Perfect for window managers that need a lightweight application launcher.
 
 ## Features
 
@@ -52,6 +52,9 @@ node geekymenu.js
 
 # Or run the compiled binary (after building)
 ./dist/geekymenu
+
+# For window managers, use with terminal emulator
+terminal -e geekymenu
 ```
 
 ### Controls

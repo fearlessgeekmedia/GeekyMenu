@@ -1,21 +1,11 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { spawn } = require("child_process");
-
-// Workaround for blessed library in packaged environments
-process.on('uncaughtException', (err) => {
-  if (err.message.includes('Cannot read properties of undefined (reading \'isAlt\')')) {
-    // Silently handle the blessed program.isAlt error
-    return;
-  }
-  // Re-throw other errors
-  throw err;
-});
-
-const blessed = require("blessed");
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { spawn } from "child_process";
+import React from "react";
+import { render, Box, Text, useInput, useApp } from "ink";
 
 // Directories to scan for .desktop files
 const home = os.homedir();
@@ -88,76 +78,23 @@ function fuzzyMatchScore(input, target) {
   return score;
 }
 
-// Main UI
-function launchAppLauncher() {
-  const allEntries = findDesktopFiles()
-    .map(parseDesktopFile)
-    .filter(Boolean)
-    .sort((a, b) => a.name.localeCompare(b.name));
+// Main App Component
+function App() {
+  const { exit, size } = useApp();
+  const [query, setQuery] = React.useState("");
+  const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [allEntries] = React.useState(() => 
+    findDesktopFiles()
+      .map(parseDesktopFile)
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 
-  let filteredEntries = [...allEntries];
-  let currentSelection = 0;
-
-  const screen = blessed.screen({
-    smartCSR: true,
-    title: "GeekyMenu",
-  });
-
-  const input = blessed.textbox({
-    parent: screen,
-    top: 0,
-    height: 3,
-    inputOnFocus: true,
-    border: "line",
-    padding: { left: 1 },
-    style: {
-      fg: "white",
-      bg: "black",
-      border: { fg: "gray" },
-      focus: { border: { fg: "green" } },
-    },
-  });
-
-  const list = blessed.list({
-    parent: screen,
-    top: 3,
-    left: 0,
-    width: "50%",
-    bottom: 0,
-    keys: true,
-    vi: true,
-    mouse: true,
-    border: "line",
-    label: " Applications ",
-    style: {
-      selected: { bg: "blue" },
-      border: { fg: "gray" },
-      focus: { border: { fg: "green" } },
-    },
-    items: [],
-  });
-
-  const preview = blessed.box({
-    parent: screen,
-    top: 3,
-    left: "50%",
-    width: "50%",
-    bottom: 0,
-    border: "line",
-    label: " Description ",
-    style: {
-      fg: "white",
-      border: { fg: "gray" },
-      focus: { border: { fg: "green" } },
-    },
-    content: "",
-  });
-
-  function refreshList(query = "") {
+  const filteredEntries = React.useMemo(() => {
     if (query === "") {
-      filteredEntries = allEntries;
+      return allEntries;
     } else {
-      filteredEntries = allEntries
+      return allEntries
         .map((e) => ({
           entry: e,
           score: fuzzyMatchScore(query, e.name),
@@ -166,114 +103,167 @@ function launchAppLauncher() {
         .sort((a, b) => b.score - a.score)
         .map((e) => e.entry);
     }
+  }, [allEntries, query]);
 
-    list.setItems(filteredEntries.map((e) => e.name));
-    if (filteredEntries.length > 0) {
-      currentSelection = Math.min(currentSelection, filteredEntries.length - 1);
-      list.select(currentSelection);
-      preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-    } else {
-      currentSelection = 0;
-      list.select(0);
-      preview.setContent("(No matches)");
-    }
-    screen.render();
-  }
+  const selectedApp = filteredEntries[selectedIndex];
 
-  input.on("keypress", (_, key) => {
-    const value = input.getValue();
-    refreshList(value);
+  // Calculate available height for the list (subtract search bar, status line and borders)
+  const terminalHeight = size?.height || process.stdout.rows || 20;
+  const terminalWidth = size?.width || process.stdout.columns || 80;
+  const availableHeight = Math.max(0, terminalHeight - 8);
+  const visibleItems = Math.min(filteredEntries.length, availableHeight);
 
-    // Handle navigation keys in input field
-    if (["down", "up", "pageup", "pagedown"].includes(key.name)) {
-      // Prevent default input behavior for these keys
-      if (key.name === "down" && filteredEntries.length > 0) {
-        currentSelection = Math.min(currentSelection + 1, filteredEntries.length - 1);
-        list.select(currentSelection);
-        preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      } else if (key.name === "up" && filteredEntries.length > 0) {
-        currentSelection = Math.max(currentSelection - 1, 0);
-        list.select(currentSelection);
-        preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      } else if (key.name === "pageup" && filteredEntries.length > 0) {
-        currentSelection = Math.max(currentSelection - 10, 0);
-        list.select(currentSelection);
-        preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      } else if (key.name === "pagedown" && filteredEntries.length > 0) {
-        currentSelection = Math.min(currentSelection + 10, filteredEntries.length - 1);
-        list.select(currentSelection);
-        preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      }
-      screen.render();
+  // Calculate which items to show (with scrolling support)
+  const startIndex = Math.max(0, Math.min(selectedIndex - Math.floor(visibleItems / 2), filteredEntries.length - visibleItems));
+  const endIndex = Math.min(startIndex + visibleItems, filteredEntries.length);
+  const visibleEntries = filteredEntries.slice(startIndex, endIndex);
+
+  useInput((input, key) => {
+    if (key.escape || key.ctrl && input === 'c') {
+      exit();
       return;
     }
 
-    if (key.name === "escape") {
-      screen.destroy();
-      process.exit(0);
+    if (key.return) {
+      if (selectedApp) {
+        spawn("sh", ["-c", selectedApp.exec], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+        exit();
+      }
+      return;
+    }
+
+    if (key.upArrow) {
+      setSelectedIndex(prev => Math.max(0, prev - 1));
+      return;
+    }
+
+    if (key.downArrow) {
+      setSelectedIndex(prev => Math.min(filteredEntries.length - 1, prev + 1));
+      return;
+    }
+
+    if (key.pageUp) {
+      setSelectedIndex(prev => Math.max(0, prev - 10));
+      return;
+    }
+
+    if (key.pageDown) {
+      setSelectedIndex(prev => Math.min(filteredEntries.length - 1, prev + 10));
+      return;
+    }
+
+    // Handle regular text input
+    if (input && !key.ctrl && !key.meta) {
+      setQuery(prev => prev + input);
+      setSelectedIndex(0);
+    }
+
+    // Handle backspace
+    if (key.backspace || key.delete) {
+      setQuery(prev => prev.slice(0, -1));
+      setSelectedIndex(0);
     }
   });
 
-  input.on("submit", () => {
-    // Launch the currently selected app when Enter is pressed in input
-    if (currentSelection >= 0 && currentSelection < filteredEntries.length) {
-      const app = filteredEntries[currentSelection];
-      screen.destroy();
-      spawn("sh", ["-c", app.exec], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-    }
-  });
+  return React.createElement(Box, { 
+    flexDirection: "column", 
+    height: terminalHeight,
+    width: terminalWidth
+  }, [
+    // Search Input
+    React.createElement(Box, { 
+      key: "search", 
+      borderStyle: "single", 
+      borderColor: "green",
+      height: 3,
+      width: "100%"
+    },
+      React.createElement(Text, {paddingX: 1}, `Search: ${query}`)
+    ),
 
-  // Handle list navigation properly
-  list.on("keypress", (_, key) => {
-    if (key.name === "escape") {
-      screen.destroy();
-      process.exit(0);
-    } else if (key.name === "down" && filteredEntries.length > 0) {
-      currentSelection = Math.min(currentSelection + 1, filteredEntries.length - 1);
-      list.select(currentSelection);
-      preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      screen.render();
-    } else if (key.name === "up" && filteredEntries.length > 0) {
-      currentSelection = Math.max(currentSelection - 1, 0);
-      list.select(currentSelection);
-      preview.setContent(filteredEntries[currentSelection].comment || "(No description)");
-      screen.render();
-    }
-  });
+    React.createElement(Box, { 
+      key: "main", 
+      flexDirection: "row", 
+      flexGrow: 1,
+      height: availableHeight + 2
+    }, [
+      // Applications List
+      React.createElement(Box, {
+        key: "list",
+        borderStyle: "single",
+        width: "50%",
+        flexDirection: "column",
+        borderColor: "gray",
+        height: availableHeight + 2
+      }, [
+        React.createElement(Box, { 
+          key: "list-header", 
+          borderStyle: "single", 
+          borderColor: "gray",
+          height: 3
+        }, React.createElement(Text, null, " Applications ")),
+        
+        React.createElement(Box, { 
+          key: "list-content", 
+          flexDirection: "column", 
+          flexGrow: 1,
+          height: availableHeight - 1
+        }, visibleEntries.map((app, index) => {
+          const globalIndex = startIndex + index;
+          const isSelected = globalIndex === selectedIndex;
+          
+          return React.createElement(Box, {
+            key: app.file,
+            paddingX: 1,
+            height: 1
+          }, React.createElement(Text, { 
+            backgroundColor: isSelected ? "blue" : undefined,
+            color: "white",
+            bold: false
+          }, app.name));
+        }).concat(
+          filteredEntries.length === 0 ? 
+            React.createElement(Box, { 
+              key: "no-matches", 
+              paddingX: 1,
+              height: 1
+            }, React.createElement(Text, { color: "red" }, "No matches")) : 
+            []
+        ))
+      ]),
 
-  list.on("select", (_, idx) => {
-    currentSelection = idx;
-    // Launch the selected app
-    if (idx >= 0 && idx < filteredEntries.length) {
-      const app = filteredEntries[idx];
-      screen.destroy();
-      spawn("sh", ["-c", app.exec], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-    }
-  });
-
-  list.on("select item", (_, idx) => {
-    if (idx >= 0 && idx < filteredEntries.length) {
-      const app = filteredEntries[idx];
-      preview.setContent(app.comment || "(No description)");
-      screen.render();
-    }
-  });
-
-  screen.key(["C-c", "q"], () => {
-    screen.destroy();
-    process.exit(0);
-  });
-
-  input.focus();
-  refreshList("");
-  screen.render();
+      // Description Preview
+      React.createElement(Box, {
+        key: "preview",
+        borderStyle: "single",
+        width: "50%",
+        flexDirection: "column",
+        borderColor: "gray",
+        height: availableHeight + 2
+      }, [
+        React.createElement(Box, { 
+          key: "preview-header", 
+          borderStyle: "single", 
+          borderColor: "gray",
+          height: 3
+        }, React.createElement(Text, null, " Description ")),
+        
+        React.createElement(Box, { 
+          key: "preview-content", 
+          paddingX: 1, 
+          flexGrow: 1,
+          height: availableHeight - 1
+        }, React.createElement(Text, null, 
+          selectedApp ? (selectedApp.comment || "(No description)") : "(No selection)"
+        ))
+      ])
+    ])
+  ]);
 }
 
-launchAppLauncher();
+// Render the app
+render(React.createElement(App));
 

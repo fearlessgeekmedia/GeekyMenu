@@ -6,16 +6,16 @@ yarn-error.log*
 package-lock.json
 yarn.lock
 
-# Build outputs
-mylauncher
-mylauncher-*
-*.exe
-*.app
-*.dmg
-*.deb
-*.rpm
-*.tar.gz
-*.zip
+# Build outputs (no longer used - we use Node.js installation)
+# mylauncher
+# mylauncher-*
+# *.exe
+# *.app
+# *.dmg
+# *.deb
+# *.rpm
+# *.tar.gz
+# *.zip
 
 # OS generated files
 .DS_Store
@@ -116,8 +116,8 @@ temp/
 # Bun
 .bun/
 
-# pkg cache
-.pkg-cache/
+# pkg cache (no longer used)
+# .pkg-cache/
 
 # Local configuration files
 config.local.js
@@ -141,5 +141,5 @@ docs/_build/
 pnpm-lock.yaml
 bun.lockb 
 
-# Ignore build output
-/dist/ 
+# Ignore build output (no longer used)
+# /dist/ 

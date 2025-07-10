@@ -26,34 +26,50 @@ The launcher provides a split-pane interface:
 - Node.js 18+ 
 - npm or yarn
 
-### Setup
+### Global Installation (Recommended)
 
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd geekymenu
-   ```
+Install GeekyMenu globally to use it as a command from anywhere:
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd geekymenu
 
-3. Run the launcher:
-   ```bash
-   node geekymenu.js
-   ```
+# Install globally
+npm install -g .
+
+# Now you can run it from anywhere
+geekymenu
+```
+
+### Local Development
+
+For development or testing:
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd geekymenu
+
+# Install dependencies
+npm install
+
+# Run locally
+npm start
+# or
+node geekymenu.js
+```
 
 ## Usage
 
 ### Running the Launcher
 
 ```bash
-# Run with Node.js
-node geekymenu.js
+# If installed globally
+geekymenu
 
-# Or run the compiled binary (after building)
-./dist/geekymenu
+# If running locally
+node geekymenu.js
 
 # For window managers, use with terminal emulator
 terminal -e geekymenu
@@ -80,36 +96,6 @@ terminal -e geekymenu
 | `Escape` | Exit launcher |
 | `Ctrl+C` | Force quit |
 
-## Building a Binary
-
-### Using pkg (Recommended)
-
-1. Install pkg globally (if not already):
-   ```bash
-   npm install -g pkg
-   ```
-
-2. Build the static binary with blessed assets:
-   ```bash
-   pkg . --targets node18-linuxstatic-x64
-   ```
-
-   The binary will be created as `dist/geekymenu`.
-
-> **Note:** The `dist/` directory is gitignored and will not be committed to version control.
-
-### Cross-platform Building
-
-To build for multiple platforms:
-
-```bash
-pkg . --targets node18-linuxstatic-x64,node18-macos-x64,node18-win-x64
-```
-
-### Including Blessed Assets
-
-The build process includes blessed's terminfo files automatically (see `package.json`'s `pkg.assets`). If you add more assets, update the `assets` array accordingly.
-
 ## Development
 
 ### Project Structure
@@ -119,14 +105,12 @@ geekymenu/
 ├── geekymenu.js      # Main application code
 ├── package.json      # Dependencies and scripts
 ├── README.md         # This file
-├── .gitignore        # Git ignore rules
-└── dist/             # Compiled binaries (gitignored)
+└── .gitignore        # Git ignore rules
 ```
 
 ### Dependencies
 
 - **blessed**: Terminal UI library
-- **glob**: File pattern matching
 
 ### Adding Features
 
@@ -143,23 +127,24 @@ The launcher is modular and easy to extend:
 1. **"Cannot find module 'blessed'"**
    - Run `npm install` to install dependencies
 
-2. **Binary not working**
-   - Ensure you're using a supported Node.js version (18+)
-   - Try rebuilding with `pkg . --targets node18-linuxstatic-x64`
+2. **"geekymenu: command not found"**
+   - Ensure you installed globally with `npm install -g .`
+   - Check that npm's global bin directory is in your PATH
 
 3. **No applications found**
    - Check that your system has `.desktop` files in standard locations
    - Verify the directories in `appDirs` exist on your system
 
-4. **Terminfo/asset errors in binary**
-   - Ensure blessed assets are included in the build (see `pkg.assets` in `package.json`)
+4. **Permission errors during global install**
+   - Use `sudo npm install -g .` (not recommended)
+   - Or configure npm to use a different global directory
 
 ### Debug Mode
 
 To run with additional logging:
 
 ```bash
-DEBUG=blessed* node geekymenu.js
+DEBUG=blessed* geekymenu
 ```
 
 ## Contributing

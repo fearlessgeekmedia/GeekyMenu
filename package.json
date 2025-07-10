@@ -7,26 +7,18 @@
     "geekymenu": "./geekymenu.js"
   },
   "scripts": {
-    "start": "node geekymenu.js",
-    "build": "pkg .",
-    "build-linux": "pkg . --targets node18-linuxstatic-x64",
-    "build-all": "pkg . --targets node18-linuxstatic-x64,node18-macos-x64,node18-win-x64"
-  },
-  "pkg": {
-    "assets": [
-      "node_modules/blessed/usr/**/*"
-    ],
-    "targets": ["node18-linuxstatic-x64"],
-    "outputPath": "dist"
+    "start": "node geekymenu.js"
   },
   "dependencies": {
-    "blessed": "^0.1.81",
-    "glob": "^11.0.3"
+    "blessed": "^0.1.81"
   },
-  "devDependencies": {
-    "pkg": "^5.8.1"
-  },
-  "keywords": ["launcher", "terminal", "linux", "desktop", "menu"],
+  "keywords": [
+    "launcher",
+    "terminal",
+    "linux",
+    "desktop",
+    "menu"
+  ],
   "author": "",
   "license": "MIT"
 }

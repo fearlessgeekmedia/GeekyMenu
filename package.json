@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A terminal-based application launcher for Linux",
   "main": "geekymenu.js",
+  "type": "module",
   "bin": {
     "geekymenu": "./geekymenu.js"
   },
@@ -10,7 +11,9 @@
     "start": "node geekymenu.js"
   },
   "dependencies": {
-    "blessed": "^0.1.81"
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
+    "react-devtools-core": "^6.1.5"
   },
   "keywords": [
     "launcher",

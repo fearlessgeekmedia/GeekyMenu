@@ -17,6 +17,7 @@ The launcher provides a split-pane interface:
 - **Left**: Filtered application list
 - **Right**: Application description preview
 
+![Geekydmenu animation](./geekymenu.gif)
 ![GeekyMenu screenshot](./screenshot.png)
 
 ## Installation

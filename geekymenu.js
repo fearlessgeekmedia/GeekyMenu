@@ -13,6 +13,9 @@ const appDirs = [
   "/usr/share/applications",
   "/usr/local/share/applications",
   path.join(home, ".local/share", "applications"),
+  // Flatpak application directories
+  "/var/lib/flatpak/exports/share/applications",
+  path.join(home, ".local/share/flatpak/exports/share/applications"),
 ];
 
 // Recursively find all .desktop files

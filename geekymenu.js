@@ -7,19 +7,59 @@ import { spawn } from "child_process";
 import React from "react";
 import { render, Box, Text, useInput, useApp } from "ink";
 
+// Check for debug mode
+const DEBUG_MODE =
+  process.argv.includes("--debug") || process.env.GEEKYMENU_DEBUG === "1";
+
 // Directories to scan for .desktop files
 const home = os.homedir();
+const username = os.userInfo().username;
 const appDirs = [
+  // Traditional FHS paths (works on all Linux distributions)
   "/usr/share/applications",
   "/usr/local/share/applications",
   path.join(home, ".local/share", "applications"),
+
+  // Flatpak paths (system-wide and user-specific)
+  "/var/lib/flatpak/exports/share/applications",
+  path.join(home, ".local/share/flatpak/exports/share/applications"),
+
+  // NixOS system paths
+  "/run/current-system/sw/share/applications",
+  "/etc/profiles/per-user/" + username + "/share/applications",
+
+  // Nix user profile paths
+  path.join(home, ".nix-profile/share/applications"),
+  path.join(home, ".local/state/nix/profiles/profile/share/applications"),
+
+  // Additional Nix paths that might exist
+  "/nix/var/nix/profiles/default/share/applications",
+  "/run/wrappers/bin/../share/applications",
+
+  // Snap paths (for Ubuntu and other distributions)
+  "/snap/bin",
+  "/var/lib/snapd/desktop/applications",
+  path.join(home, ".local/share/applications/snap"),
 ];
+
+// Debug function
+function debugLog(...args) {
+  if (DEBUG_MODE) {
+    console.log("[DEBUG]", ...args);
+  }
+}
 
 // Recursively find all .desktop files
 function findDesktopFiles() {
+  debugLog("Starting desktop file scan...");
+  debugLog("Scanning directories:", appDirs);
   let results = [];
   for (const dir of appDirs) {
-    if (!fs.existsSync(dir)) continue;
+    if (!fs.existsSync(dir)) {
+      debugLog(`Directory does not exist: ${dir}`);
+      continue;
+    }
+    debugLog(`Scanning directory: ${dir}`);
     const stack = [dir];
     while (stack.length) {
       const current = stack.pop();
@@ -34,6 +74,7 @@ function findDesktopFiles() {
       }
     }
   }
+  debugLog(`Found ${results.length} .desktop files total`);
   return results;
 }
 
@@ -83,12 +124,23 @@ function App() {
   const { exit, size } = useApp();
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
-  const [allEntries] = React.useState(() => 
-    findDesktopFiles()
+  const [allEntries] = React.useState(() => {
+    const desktopFiles = findDesktopFiles();
+    const parsedApps = desktopFiles
       .map(parseDesktopFile)
       .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name))
-  );
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    debugLog(`Parsed ${parsedApps.length} valid applications`);
+    if (DEBUG_MODE && parsedApps.length > 0) {
+      debugLog(
+        "Sample applications:",
+        parsedApps.slice(0, 5).map((app) => app.name),
+      );
+    }
+
+    return parsedApps;
+  });
 
   const filteredEntries = React.useMemo(() => {
     if (query === "") {
@@ -114,12 +166,18 @@ function App() {
   const visibleItems = Math.min(filteredEntries.length, availableHeight);
 
   // Calculate which items to show (with scrolling support)
-  const startIndex = Math.max(0, Math.min(selectedIndex - Math.floor(visibleItems / 2), filteredEntries.length - visibleItems));
+  const startIndex = Math.max(
+    0,
+    Math.min(
+      selectedIndex - Math.floor(visibleItems / 2),
+      filteredEntries.length - visibleItems,
+    ),
+  );
   const endIndex = Math.min(startIndex + visibleItems, filteredEntries.length);
   const visibleEntries = filteredEntries.slice(startIndex, endIndex);
 
   useInput((input, key) => {
-    if (key.escape || key.ctrl && input === 'c') {
+    if (key.escape || (key.ctrl && input === "c")) {
       exit();
       return;
     }
@@ -136,134 +194,223 @@ function App() {
     }
 
     if (key.upArrow) {
-      setSelectedIndex(prev => Math.max(0, prev - 1));
+      setSelectedIndex((prev) => Math.max(0, prev - 1));
       return;
     }
 
     if (key.downArrow) {
-      setSelectedIndex(prev => Math.min(filteredEntries.length - 1, prev + 1));
+      setSelectedIndex((prev) =>
+        Math.min(filteredEntries.length - 1, prev + 1),
+      );
       return;
     }
 
     if (key.pageUp) {
-      setSelectedIndex(prev => Math.max(0, prev - 10));
+      setSelectedIndex((prev) => Math.max(0, prev - 10));
       return;
     }
 
     if (key.pageDown) {
-      setSelectedIndex(prev => Math.min(filteredEntries.length - 1, prev + 10));
+      setSelectedIndex((prev) =>
+        Math.min(filteredEntries.length - 1, prev + 10),
+      );
       return;
     }
 
     // Handle regular text input
     if (input && !key.ctrl && !key.meta) {
-      setQuery(prev => prev + input);
+      setQuery((prev) => prev + input);
       setSelectedIndex(0);
     }
 
     // Handle backspace
     if (key.backspace || key.delete) {
-      setQuery(prev => prev.slice(0, -1));
+      setQuery((prev) => prev.slice(0, -1));
       setSelectedIndex(0);
     }
   });
 
-  return React.createElement(Box, { 
-    flexDirection: "column", 
-    height: terminalHeight,
-    width: terminalWidth
-  }, [
-    // Search Input
-    React.createElement(Box, { 
-      key: "search", 
-      borderStyle: "single", 
-      borderColor: "green",
-      height: 3,
-      width: "100%"
+  return React.createElement(
+    Box,
+    {
+      flexDirection: "column",
+      height: terminalHeight,
+      width: terminalWidth,
     },
-      React.createElement(Text, {paddingX: 1}, `Search: ${query}`)
-    ),
+    [
+      // Search Input
+      React.createElement(
+        Box,
+        {
+          key: "search",
+          borderStyle: "single",
+          borderColor: "green",
+          height: 3,
+          width: "100%",
+        },
+        React.createElement(Text, { paddingX: 1 }, `Search: ${query}`),
+      ),
 
-    React.createElement(Box, { 
-      key: "main", 
-      flexDirection: "row", 
-      flexGrow: 1,
-      height: availableHeight + 2
-    }, [
-      // Applications List
-      React.createElement(Box, {
-        key: "list",
-        borderStyle: "single",
-        width: "50%",
-        flexDirection: "column",
-        borderColor: "gray",
-        height: availableHeight + 2
-      }, [
-        React.createElement(Box, { 
-          key: "list-header", 
-          borderStyle: "single", 
-          borderColor: "gray",
-          height: 3
-        }, React.createElement(Text, null, " Applications ")),
-        
-        React.createElement(Box, { 
-          key: "list-content", 
-          flexDirection: "column", 
+      React.createElement(
+        Box,
+        {
+          key: "main",
+          flexDirection: "row",
           flexGrow: 1,
-          height: availableHeight - 1
-        }, visibleEntries.map((app, index) => {
-          const globalIndex = startIndex + index;
-          const isSelected = globalIndex === selectedIndex;
-          
-          return React.createElement(Box, {
-            key: app.file,
-            paddingX: 1,
-            height: 1
-          }, React.createElement(Text, { 
-            backgroundColor: isSelected ? "blue" : undefined,
-            color: "white",
-            bold: false
-          }, app.name));
-        }).concat(
-          filteredEntries.length === 0 ? 
-            React.createElement(Box, { 
-              key: "no-matches", 
-              paddingX: 1,
-              height: 1
-            }, React.createElement(Text, { color: "red" }, "No matches")) : 
-            []
-        ))
-      ]),
+          height: availableHeight + 2,
+        },
+        [
+          // Applications List
+          React.createElement(
+            Box,
+            {
+              key: "list",
+              borderStyle: "single",
+              width: "50%",
+              flexDirection: "column",
+              borderColor: "gray",
+              height: availableHeight + 2,
+            },
+            [
+              React.createElement(
+                Box,
+                {
+                  key: "list-header",
+                  borderStyle: "single",
+                  borderColor: "gray",
+                  height: 3,
+                },
+                React.createElement(Text, null, " Applications "),
+              ),
 
-      // Description Preview
-      React.createElement(Box, {
-        key: "preview",
-        borderStyle: "single",
-        width: "50%",
-        flexDirection: "column",
-        borderColor: "gray",
-        height: availableHeight + 2
-      }, [
-        React.createElement(Box, { 
-          key: "preview-header", 
-          borderStyle: "single", 
-          borderColor: "gray",
-          height: 3
-        }, React.createElement(Text, null, " Description ")),
-        
-        React.createElement(Box, { 
-          key: "preview-content", 
-          paddingX: 1, 
-          flexGrow: 1,
-          height: availableHeight - 1
-        }, React.createElement(Text, null, 
-          selectedApp ? (selectedApp.comment || "(No description)") : "(No selection)"
-        ))
-      ])
-    ])
-  ]);
+              React.createElement(
+                Box,
+                {
+                  key: "list-content",
+                  flexDirection: "column",
+                  flexGrow: 1,
+                  height: availableHeight - 1,
+                },
+                visibleEntries
+                  .map((app, index) => {
+                    const globalIndex = startIndex + index;
+                    const isSelected = globalIndex === selectedIndex;
+
+                    return React.createElement(
+                      Box,
+                      {
+                        key: app.file,
+                        paddingX: 1,
+                        height: 1,
+                      },
+                      React.createElement(
+                        Text,
+                        {
+                          backgroundColor: isSelected ? "blue" : undefined,
+                          color: "white",
+                          bold: false,
+                        },
+                        app.name,
+                      ),
+                    );
+                  })
+                  .concat(
+                    filteredEntries.length === 0
+                      ? React.createElement(
+                          Box,
+                          {
+                            key: "no-matches",
+                            paddingX: 1,
+                            height: 1,
+                          },
+                          React.createElement(
+                            Text,
+                            { color: "red" },
+                            "No matches",
+                          ),
+                        )
+                      : [],
+                  ),
+              ),
+            ],
+          ),
+
+          // Description Preview
+          React.createElement(
+            Box,
+            {
+              key: "preview",
+              borderStyle: "single",
+              width: "50%",
+              flexDirection: "column",
+              borderColor: "gray",
+              height: availableHeight + 2,
+            },
+            [
+              React.createElement(
+                Box,
+                {
+                  key: "preview-header",
+                  borderStyle: "single",
+                  borderColor: "gray",
+                  height: 3,
+                },
+                React.createElement(Text, null, " Description "),
+              ),
+
+              React.createElement(
+                Box,
+                {
+                  key: "preview-content",
+                  paddingX: 1,
+                  flexGrow: 1,
+                  height: availableHeight - 1,
+                },
+                React.createElement(
+                  Text,
+                  null,
+                  selectedApp
+                    ? selectedApp.comment || "(No description)"
+                    : "(No selection)",
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+// Debug mode - print info and exit
+if (DEBUG_MODE) {
+  console.log("🔍 GeekyMenu Debug Mode");
+  console.log("======================");
+  console.log();
+
+  const desktopFiles = findDesktopFiles();
+  const apps = desktopFiles.map(parseDesktopFile).filter(Boolean);
+
+  console.log(`Found ${desktopFiles.length} .desktop files`);
+  console.log(`Parsed ${apps.length} valid applications`);
+  console.log();
+
+  if (apps.length > 0) {
+    console.log("✅ SUCCESS: Applications found! GeekyMenu should work.");
+    console.log("Sample applications:");
+    apps.slice(0, 10).forEach((app) => console.log(`  • ${app.name}`));
+    if (apps.length > 10) {
+      console.log(`  ... and ${apps.length - 10} more`);
+    }
+  } else {
+    console.log("❌ ERROR: No applications found!");
+    console.log(
+      'GeekyMenu will show "No matches" because no applications are available.',
+    );
+  }
+
+  process.exit(0);
 }
 
 // Render the app
 render(React.createElement(App));
-
